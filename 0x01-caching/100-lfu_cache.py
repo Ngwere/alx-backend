@@ -1,76 +1,73 @@
 #!/usr/bin/env python3
 """Least Frequently Used caching module.
 """
-from collections import defaultdict, OrderedDict
+from collections import OrderedDict
+
 from base_caching import BaseCaching
 
 
 class LFUCache(BaseCaching):
     """Represents an object that allows storing and
-    retrieving items from a dictionary with an LFU
+    retrieving items from a dictionary with a LFU
     removal mechanism when the limit is reached.
     """
     def __init__(self):
         """Initializes the cache.
         """
         super().__init__()
-        self.cache_data = {}
-        self.freq_map = defaultdict(int)  # Track frequency of each key
-        self.lru_order = OrderedDict()     # Track order of usage for LRU
+        self.cache_data = OrderedDict()
+        self.keys_freq = []
 
-    def put(self, key: str, item: any) -> None:
+    def __reorder_items(self, mru_key):
+        """Reorders the items in this cache based on the most
+        recently used item.
+        """
+        max_positions = []
+        mru_freq = 0
+        mru_pos = 0
+        ins_pos = 0
+        for i, key_freq in enumerate(self.keys_freq):
+            if key_freq[0] == mru_key:
+                mru_freq = key_freq[1] + 1
+                mru_pos = i
+                break
+            elif len(max_positions) == 0:
+                max_positions.append(i)
+            elif key_freq[1] < self.keys_freq[max_positions[-1]][1]:
+                max_positions.append(i)
+        max_positions.reverse()
+        for pos in max_positions:
+            if self.keys_freq[pos][1] > mru_freq:
+                break
+            ins_pos = pos
+        self.keys_freq.pop(mru_pos)
+        self.keys_freq.insert(ins_pos, [mru_key, mru_freq])
+
+    def put(self, key, item):
         """Adds an item in the cache.
-        
-        Args:
-            key (str): The key to store the item under.
-            item (any): The item to store.
         """
         if key is None or item is None:
             return
-
-        # If the key already exists, update it
-        if key in self.cache_data:
-            self.cache_data[key] = item
-            self.freq_map[key] += 1  # Increment frequency
-            self.lru_order.move_to_end(key)  # Update LRU order
-        else:
-            # If new key, check if we need to evict
-            if len(self.cache_data) >= BaseCaching.MAX_ITEMS:
-                # Find the least frequently used items
-                min_freq = min(self.freq_map.values())
-                lfu_candidates = [k for k, v in self.freq_map.items() if v == min_freq]
-
-                # If there are multiple LFU candidates, use LRU to determine which to discard
-                lfu_key = min(lfu_candidates, key=lambda k: self.lru_order[k])
-
-                # Discard the LFU item
+        if key not in self.cache_data:
+            if len(self.cache_data) + 1 > BaseCaching.MAX_ITEMS:
+                lfu_key, _ = self.keys_freq[-1]
+                self.cache_data.pop(lfu_key)
+                self.keys_freq.pop()
                 print("DISCARD:", lfu_key)
-                del self.cache_data[lfu_key]
-                del self.freq_map[lfu_key]
-                del self.lru_order[lfu_key]
-
-            # Add the new item
             self.cache_data[key] = item
-            self.freq_map[key] = 1  # Frequency starts at 1
-            self.lru_order[key] = None  # Add to LRU order (value is irrelevant)
+            ins_index = len(self.keys_freq)
+            for i, key_freq in enumerate(self.keys_freq):
+                if key_freq[1] == 0:
+                    ins_index = i
+                    break
+            self.keys_freq.insert(ins_index, [key, 0])
+        else:
+            self.cache_data[key] = item
+            self.__reorder_items(key)
 
-        # Update the LRU order for the current key
-        self.lru_order.move_to_end(key)
-
-    def get(self, key: str) -> any:
+    def get(self, key):
         """Retrieves an item by key.
-        
-        Args:
-            key (str): The key of the item to retrieve.
-        
-        Returns:
-            any: The item associated with the key, or None if not found.
         """
-        if key is None or key not in self.cache_data:
-            return None
-
-        # Update frequency and LRU order
-        self.freq_map[key] += 1
-        self.lru_order.move_to_end(key)
-
-        return self.cache_data[key]
+        if key is not None and key in self.cache_data:
+            self.__reorder_items(key)
+        return self.cache_data.get(key, None)
