@@ -15,8 +15,8 @@ class LFUCache(BaseCaching):
         """
         super().__init__()
         self.cache_data = {}
-        self.freq_map = defaultdict(int)  # To track frequency of each key
-        self.lru_order = OrderedDict()     # To track order of usage for LRU
+        self.freq_map = defaultdict(int)  # Track frequency of each key
+        self.lru_order = OrderedDict()     # Track order of usage for LRU
 
     def put(self, key: str, item: any) -> None:
         """Adds an item in the cache.
@@ -28,21 +28,20 @@ class LFUCache(BaseCaching):
         if key is None or item is None:
             return
 
-        # Add or update the item
+        # If the key already exists, update it
         if key in self.cache_data:
             self.cache_data[key] = item
             self.freq_map[key] += 1  # Increment frequency
             self.lru_order.move_to_end(key)  # Update LRU order
         else:
+            # If new key, check if we need to evict
             if len(self.cache_data) >= BaseCaching.MAX_ITEMS:
                 # Find the least frequently used items
                 min_freq = min(self.freq_map.values())
                 lfu_candidates = [k for k, v in self.freq_map.items() if v == min_freq]
 
                 # If there are multiple LFU candidates, use LRU to determine which to discard
-                lfu_key = lfu_candidates[0]  # Start with the first candidate
-                if len(lfu_candidates) > 1:
-                    lfu_key = min(lfu_candidates, key=lambda k: self.lru_order[k])
+                lfu_key = min(lfu_candidates, key=lambda k: self.lru_order[k])
 
                 # Discard the LFU item
                 print("DISCARD:", lfu_key)
@@ -54,8 +53,9 @@ class LFUCache(BaseCaching):
             self.cache_data[key] = item
             self.freq_map[key] = 1  # Frequency starts at 1
             self.lru_order[key] = None  # Add to LRU order (value is irrelevant)
-        
-        self.lru_order.move_to_end(key)  # Update LRU order
+
+        # Update the LRU order for the current key
+        self.lru_order.move_to_end(key)
 
     def get(self, key: str) -> any:
         """Retrieves an item by key.
